@@ -9,10 +9,14 @@ var Belt_MapInt = require("bs-platform/lib/js/belt_MapInt.js");
 
 function stringOfTile(tile) {
   if (tile[/* hasBomb */1]) {
-    return "1";
+    return "X";
   } else {
-    return "0";
+    return "";
   }
+}
+
+function reactOfTile(tile) {
+  return React.createElement("span", undefined, stringOfTile(tile));
 }
 
 function initTiles(numBombs) {
@@ -32,16 +36,29 @@ function initTiles(numBombs) {
                   })));
 }
 
+function defaultTile(param) {
+  return /* record */[
+          /* state : Hidden */0,
+          /* hasBomb */false
+        ];
+}
+
 function Game$Tile(Props) {
   var onClick = Props.onClick;
   var tile = Props.tile;
   return React.createElement("button", {
               className: "square",
               onClick: onClick
-            }, stringOfTile(tile));
+            }, reactOfTile(tile));
 }
 
-var Tile = /* module */[/* make */Game$Tile];
+var Tile = /* module */[
+  /* stringOfTile */stringOfTile,
+  /* reactOfTile */reactOfTile,
+  /* initTiles */initTiles,
+  /* defaultTile */defaultTile,
+  /* make */Game$Tile
+];
 
 function Game$Board(Props) {
   var onClick = Props.onClick;
@@ -101,8 +118,6 @@ var make = Game;
 exports.boardWidth = boardWidth;
 exports.boardHeight = boardHeight;
 exports.numBombs = numBombs;
-exports.stringOfTile = stringOfTile;
-exports.initTiles = initTiles;
 exports.Tile = Tile;
 exports.Board = Board;
 exports.handleClick = handleClick;
