@@ -3,13 +3,17 @@
 
 var Curry = require("bs-platform/lib/js/curry.js");
 var React = require("react");
+var Caml_obj = require("bs-platform/lib/js/caml_obj.js");
+var Belt_List = require("bs-platform/lib/js/belt_List.js");
 var Belt_Array = require("bs-platform/lib/js/belt_Array.js");
 var Caml_int32 = require("bs-platform/lib/js/caml_int32.js");
 var Belt_MapInt = require("bs-platform/lib/js/belt_MapInt.js");
 
 function stringOfTile(tile) {
-  if (tile[/* hasBomb */1]) {
+  if (tile[/* hasBomb */3]) {
     return "X";
+  } else if (tile[/* numNeighbourBombs */1] > 0) {
+    return String(tile[/* numNeighbourBombs */1]);
   } else {
     return "";
   }
@@ -19,28 +23,82 @@ function reactOfTile(tile) {
   return React.createElement("span", undefined, stringOfTile(tile));
 }
 
+var noneTile = /* record */[
+  /* index */-1,
+  /* numNeighbourBombs */0,
+  /* state : Hidden */0,
+  /* hasBomb */false
+];
+
+function getNeighbours(tiles, tile) {
+  var tileIndex = tile[/* index */0];
+  var x = tileIndex % 20;
+  var y = tileIndex / 20 | 0;
+  return Belt_List.keep(Belt_List.flatten(Belt_List.map(/* :: */[
+                      -1,
+                      /* :: */[
+                        0,
+                        /* :: */[
+                          1,
+                          /* [] */0
+                        ]
+                      ]
+                    ], (function (i) {
+                        return Belt_List.map(/* :: */[
+                                    -1,
+                                    /* :: */[
+                                      0,
+                                      /* :: */[
+                                        1,
+                                        /* [] */0
+                                      ]
+                                    ]
+                                  ], (function (j) {
+                                      var x2 = x + i | 0;
+                                      var y2 = y + j | 0;
+                                      if (i === 0 && j === 0 || x2 < 0 || x2 >= 20 || y2 < 0 || y2 >= 20) {
+                                        return noneTile;
+                                      } else {
+                                        var neighbourIndex = Caml_int32.imul(y2, 20) + x2 | 0;
+                                        return Belt_MapInt.getWithDefault(tiles, neighbourIndex, noneTile);
+                                      }
+                                    }));
+                      }))), (function (t) {
+                return Caml_obj.caml_notequal(t, noneTile);
+              }));
+}
+
+function calcNumNeighbourBombs(tiles, tile) {
+  return Belt_List.length(Belt_List.keep(getNeighbours(tiles, tile), (function (t) {
+                    return t[/* hasBomb */3];
+                  })));
+}
+
 function initTiles(numBombs) {
   var bombIndexes = Belt_Array.slice(Belt_Array.makeByAndShuffle(400, (function (i) {
               return i;
             })), 0, numBombs);
-  return Belt_MapInt.fromArray(Belt_Array.mapWithIndex(Belt_Array.make(400, 0), (function (index, _value) {
-                    return /* tuple */[
-                            index,
-                            /* record */[
-                              /* state : Hidden */0,
-                              /* hasBomb */Belt_Array.some(bombIndexes, (function (bombIndex) {
-                                      return bombIndex === index;
-                                    }))
-                            ]
-                          ];
-                  })));
-}
-
-function defaultTile(param) {
-  return /* record */[
-          /* state : Hidden */0,
-          /* hasBomb */false
-        ];
+  var tiles = Belt_MapInt.fromArray(Belt_Array.mapWithIndex(Belt_Array.make(400, 0), (function (index, _value) {
+              return /* tuple */[
+                      index,
+                      /* record */[
+                        /* index */index,
+                        /* numNeighbourBombs */0,
+                        /* state : Hidden */0,
+                        /* hasBomb */Belt_Array.some(bombIndexes, (function (bombIndex) {
+                                return bombIndex === index;
+                              }))
+                      ]
+                    ];
+            })));
+  return Belt_MapInt.map(tiles, (function (t) {
+                return /* record */[
+                        /* index */t[/* index */0],
+                        /* numNeighbourBombs */calcNumNeighbourBombs(tiles, t),
+                        /* state */t[/* state */2],
+                        /* hasBomb */t[/* hasBomb */3]
+                      ];
+              }));
 }
 
 function Game$Tile(Props) {
@@ -55,8 +113,10 @@ function Game$Tile(Props) {
 var Tile = /* module */[
   /* stringOfTile */stringOfTile,
   /* reactOfTile */reactOfTile,
+  /* noneTile */noneTile,
+  /* getNeighbours */getNeighbours,
+  /* calcNumNeighbourBombs */calcNumNeighbourBombs,
   /* initTiles */initTiles,
-  /* defaultTile */defaultTile,
   /* make */Game$Tile
 ];
 
@@ -73,10 +133,7 @@ function Game$Board(Props) {
                                       return i;
                                     })), (function (col) {
                                   var tileIndex = Caml_int32.imul(20, row) + col | 0;
-                                  var tile = Belt_MapInt.getWithDefault(tiles, tileIndex, /* record */[
-                                        /* state : Hidden */0,
-                                        /* hasBomb */false
-                                      ]);
+                                  var tile = Belt_MapInt.getWithDefault(tiles, tileIndex, noneTile);
                                   return React.createElement(Game$Tile, {
                                               onClick: (function (evt) {
                                                   return Curry._2(onClick, evt, tile);
@@ -98,20 +155,31 @@ function Game(Props) {
   Props.message;
   var match = React.useReducer((function (state, action) {
           return state;
-        }), /* record */[/* tiles */initTiles(100)]);
+        }), /* record */[/* tiles */initTiles(50)]);
+  var state = match[0];
+  var neighbourDebug = function (_evt) {
+    console.log("click neighbour debug");
+    var tile = Belt_MapInt.getExn(state[/* tiles */0], 19);
+    console.log(tile);
+    var neighbours = getNeighbours(state[/* tiles */0], tile);
+    console.log(Belt_List.toArray(neighbours));
+    return /* () */0;
+  };
   return React.createElement("div", {
               className: "game-board"
             }, React.createElement(Game$Board, {
                   onClick: handleClick,
-                  tiles: match[0][/* tiles */0]
-                }));
+                  tiles: state[/* tiles */0]
+                }), React.createElement("button", {
+                  onClick: neighbourDebug
+                }, "neighbour debug"));
 }
 
 var boardWidth = 20;
 
 var boardHeight = 20;
 
-var numBombs = 100;
+var numBombs = 50;
 
 var make = Game;
 
