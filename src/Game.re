@@ -23,9 +23,12 @@ module Tile = {
       "";
     };
 
-  let reactOfTile = tile => {
-    <span> {React.string(stringOfTile(tile))} </span>;
-  };
+  let reactOfTile = tile =>
+    if (tile.state == Hidden) {
+      React.null;
+    } else {
+      <span> {React.string(stringOfTile(tile))} </span>;
+    };
 
   let noneTile = {
     index: (-1),
@@ -101,7 +104,7 @@ module Tile = {
 };
 
 type action =
-  | NextMove(int)
+  | RevealTile(Tile.t)
   | JumpToHistory(int);
 
 type state = {tiles: Belt.Map.Int.t(Tile.t)};
@@ -132,19 +135,28 @@ module Board = {
   };
 };
 
-let handleClick = (_event, tile) => Js.log(tile);
-
 [@react.component]
 let make = (~message) => {
   let (state, dispatch) =
     React.useReducer(
       (state, action) =>
         switch (action) {
-        | NextMove(squareIndex) => state
+        | RevealTile(tile) => {
+            tiles:
+              Belt.Map.Int.set(
+                state.tiles,
+                tile.index,
+                {...tile, state: Tile.Revealed},
+              ),
+          }
         | JumpToHistory(historyIndex) => state
         },
       {tiles: Tile.initTiles(numBombs)},
     );
+
+  let handleClick = (_event, tile) => {
+    dispatch(RevealTile(tile));
+  };
 
   let neighbourDebug = _evt => {
     Js.log("click neighbour debug");
