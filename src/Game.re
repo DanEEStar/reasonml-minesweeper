@@ -1,6 +1,6 @@
 let boardWidth = 20;
 let boardHeight = 20;
-let numBombs = 50;
+let numBombs = 10;
 
 module Tile = {
   type tileState =
@@ -10,6 +10,7 @@ module Tile = {
   type t = {
     index: int,
     numNeighbourBombs: int,
+    neighbours: list(t),
     state: tileState,
     hasBomb: bool,
   };
@@ -20,11 +21,11 @@ module Tile = {
     } else if (tile.numNeighbourBombs > 0) {
       string_of_int(tile.numNeighbourBombs);
     } else {
-      "";
+      "0";
     };
 
-  let reactOfTile = tile =>
-    if (tile.state == Hidden) {
+  let reactOfTile = (tile, showHidden) =>
+    if (tile.state == Hidden && !showHidden) {
       React.null;
     } else {
       <span> {React.string(stringOfTile(tile))} </span>;
@@ -33,6 +34,7 @@ module Tile = {
   let noneTile = {
     index: (-1),
     numNeighbourBombs: 0,
+    neighbours: [],
     state: Hidden,
     hasBomb: false,
   };
@@ -85,6 +87,7 @@ module Tile = {
               index,
               state: Hidden,
               numNeighbourBombs: 0,
+              neighbours: [],
               hasBomb:
                 Belt.Array.some(bombIndexes, bombIndex => bombIndex == index),
             },
@@ -92,28 +95,35 @@ module Tile = {
         )
       ->Belt.Map.Int.fromArray;
 
-    Belt.Map.Int.map(tiles, t =>
-      {...t, numNeighbourBombs: calcNumNeighbourBombs(tiles, t)}
-    );
+    let tilesWithCalcBombs = Belt.Map.Int.map(tiles, t => {
+      {...t, numNeighbourBombs: calcNumNeighbourBombs(tiles, t)};
+    });
+
+    Belt.Map.Int.map(tilesWithCalcBombs, t => {
+      {...t, neighbours: getNeighbours(tilesWithCalcBombs, t)};
+    })
   };
 
   [@react.component]
-  let make = (~onClick, ~tile) => {
-    <button className="square" onClick> {reactOfTile(tile)} </button>;
+  let make = (~onClick, ~tile, ~showHidden) => {
+    <button className="square" onClick> {reactOfTile(tile, showHidden)} </button>;
   };
 };
 
 type action =
   | RevealTile(Tile.t)
-  | JumpToHistory(int);
+  | ToggleHidden;
 
-type state = {tiles: Belt.Map.Int.t(Tile.t)};
+type state = {
+  tiles: Belt.Map.Int.t(Tile.t),
+  showHidden: bool
+};
 
 module Board = {
   [@react.component]
-  let make = (~onClick, ~tiles) => {
+  let make = (~onClick, ~state: state) => {
     let renderTile = tile => {
-      <Tile onClick={evt => onClick(evt, tile)} tile />;
+      <Tile onClick={evt => onClick(evt, tile)} tile showHidden=state.showHidden/>;
     };
 
     ReasonReact.array(
@@ -124,7 +134,7 @@ module Board = {
              col => {
                let tileIndex = boardWidth * row + col;
                renderTile(
-                 Belt.Map.Int.getWithDefault(tiles, tileIndex, Tile.noneTile),
+                 Belt.Map.Int.getWithDefault(state.tiles, tileIndex, Tile.noneTile),
                );
              },
            )
@@ -135,41 +145,47 @@ module Board = {
   };
 };
 
+let revealTile = (tile: Tile.t, state) => {
+  let rec revealNeighbourTiles = (tile: Tile.t, tiles) => {
+    let tiles = Belt.Map.Int.set(state.tiles, tile.index, {...tile, state: Tile.Revealed});
+    if(tile.numNeighbourBombs == 0) {
+      Belt.List.reduce(tile.neighbours, tiles, (tiles, t) => {
+        Js.log(t.index);
+        Js.log(t.hasBomb);
+        Js.log(t.numNeighbourBombs);
+        Belt.Map.Int.set(tiles, t.index, {...t, state: Tile.Revealed});
+      });
+    } else {
+      tiles;
+    }
+  };
+  {...state, tiles: revealNeighbourTiles(tile, state.tiles)};
+};
+
 [@react.component]
 let make = (~message) => {
   let (state, dispatch) =
     React.useReducer(
       (state, action) =>
         switch (action) {
-        | RevealTile(tile) => {
-            tiles:
-              Belt.Map.Int.set(
-                state.tiles,
-                tile.index,
-                {...tile, state: Tile.Revealed},
-              ),
-          }
-        | JumpToHistory(historyIndex) => state
+        | RevealTile(tile) => revealTile(tile, state)
+        | ToggleHidden => {...state, showHidden: !state.showHidden}
         },
-      {tiles: Tile.initTiles(numBombs)},
+      {showHidden: false, tiles: Tile.initTiles(numBombs)},
     );
 
   let handleClick = (_event, tile) => {
     dispatch(RevealTile(tile));
   };
 
-  let neighbourDebug = _evt => {
-    Js.log("click neighbour debug");
-    let tile = Belt.Map.Int.getExn(state.tiles, 19);
-    Js.log(tile);
-    let neighbours = Tile.getNeighbours(state.tiles, tile);
-    Js.log(Belt.List.toArray(neighbours));
+  let toggleHidden = _evt => {
+    dispatch(ToggleHidden);
   };
 
   <div className="game-board">
-    <Board onClick=handleClick tiles={state.tiles} />
-    <button onClick=neighbourDebug>
-      {React.string("neighbour debug")}
+    <Board onClick=handleClick state=state />
+    <button onClick=toggleHidden>
+      {React.string("toggle hidden")}
     </button>
   </div>;
 };
