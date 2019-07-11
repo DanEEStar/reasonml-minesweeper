@@ -10,7 +10,7 @@ var Caml_int32 = require("bs-platform/lib/js/caml_int32.js");
 var Belt_MapInt = require("bs-platform/lib/js/belt_MapInt.js");
 
 function stringOfTile(tile) {
-  if (tile[/* hasBomb */4]) {
+  if (tile[/* hasBomb */3]) {
     return "X";
   } else if (tile[/* numNeighbourBombs */1] > 0) {
     return String(tile[/* numNeighbourBombs */1]);
@@ -20,7 +20,7 @@ function stringOfTile(tile) {
 }
 
 function reactOfTile(tile, showHidden) {
-  if (tile[/* state */3] === /* Hidden */0 && !showHidden) {
+  if (tile[/* state */2] === /* Hidden */0 && !showHidden) {
     return null;
   } else {
     return React.createElement("span", undefined, stringOfTile(tile));
@@ -30,7 +30,6 @@ function reactOfTile(tile, showHidden) {
 var noneTile = /* record */[
   /* index */-1,
   /* numNeighbourBombs */0,
-  /* neighbours : [] */0,
   /* state : Hidden */0,
   /* hasBomb */false
 ];
@@ -75,7 +74,7 @@ function getNeighbours(tiles, tile) {
 
 function calcNumNeighbourBombs(tiles, tile) {
   return Belt_List.length(Belt_List.keep(getNeighbours(tiles, tile), (function (t) {
-                    return t[/* hasBomb */4];
+                    return t[/* hasBomb */3];
                   })));
 }
 
@@ -89,7 +88,6 @@ function initTiles(numBombs) {
                       /* record */[
                         /* index */index,
                         /* numNeighbourBombs */0,
-                        /* neighbours : [] */0,
                         /* state : Hidden */0,
                         /* hasBomb */Belt_Array.some(bombIndexes, (function (bombIndex) {
                                 return bombIndex === index;
@@ -97,22 +95,12 @@ function initTiles(numBombs) {
                       ]
                     ];
             })));
-  var tilesWithCalcBombs = Belt_MapInt.map(tiles, (function (t) {
-          return /* record */[
-                  /* index */t[/* index */0],
-                  /* numNeighbourBombs */calcNumNeighbourBombs(tiles, t),
-                  /* neighbours */t[/* neighbours */2],
-                  /* state */t[/* state */3],
-                  /* hasBomb */t[/* hasBomb */4]
-                ];
-        }));
-  return Belt_MapInt.map(tilesWithCalcBombs, (function (t) {
+  return Belt_MapInt.map(tiles, (function (t) {
                 return /* record */[
                         /* index */t[/* index */0],
-                        /* numNeighbourBombs */t[/* numNeighbourBombs */1],
-                        /* neighbours */getNeighbours(tilesWithCalcBombs, t),
-                        /* state */t[/* state */3],
-                        /* hasBomb */t[/* hasBomb */4]
+                        /* numNeighbourBombs */calcNumNeighbourBombs(tiles, t),
+                        /* state */t[/* state */2],
+                        /* hasBomb */t[/* hasBomb */3]
                       ];
               }));
 }
@@ -165,25 +153,25 @@ function Game$Board(Props) {
 var Board = /* module */[/* make */Game$Board];
 
 function revealTile(tile, state) {
-  var revealNeighbourTiles = function (tile, tiles) {
-    var tiles$1 = Belt_MapInt.set(state[/* tiles */0], tile[/* index */0], /* record */[
+  console.log("revealTile called");
+  var revealNeighbourTiles = function (tiles, tile) {
+    var tiles$1 = Belt_MapInt.set(tiles, tile[/* index */0], /* record */[
           /* index */tile[/* index */0],
           /* numNeighbourBombs */tile[/* numNeighbourBombs */1],
-          /* neighbours */tile[/* neighbours */2],
           /* state : Revealed */1,
-          /* hasBomb */tile[/* hasBomb */4]
+          /* hasBomb */tile[/* hasBomb */3]
         ]);
     if (tile[/* numNeighbourBombs */1] === 0) {
-      return Belt_List.reduce(tile[/* neighbours */2], tiles$1, (function (tiles, t) {
-                    console.log(t[/* index */0]);
-                    console.log(t[/* hasBomb */4]);
-                    console.log(t[/* numNeighbourBombs */1]);
-                    return Belt_MapInt.set(tiles, t[/* index */0], /* record */[
+      var neighbours = Belt_List.keep(getNeighbours(tiles$1, tile), (function (t) {
+              return t[/* state */2] === /* Hidden */0;
+            }));
+      return Belt_List.reduce(neighbours, tiles$1, (function (tiles, t) {
+                    var tiles$1 = revealNeighbourTiles(tiles, t);
+                    return Belt_MapInt.set(tiles$1, t[/* index */0], /* record */[
                                 /* index */t[/* index */0],
                                 /* numNeighbourBombs */t[/* numNeighbourBombs */1],
-                                /* neighbours */t[/* neighbours */2],
                                 /* state : Revealed */1,
-                                /* hasBomb */t[/* hasBomb */4]
+                                /* hasBomb */t[/* hasBomb */3]
                               ]);
                   }));
     } else {
@@ -191,7 +179,7 @@ function revealTile(tile, state) {
     }
   };
   return /* record */[
-          /* tiles */revealNeighbourTiles(tile, state[/* tiles */0]),
+          /* tiles */revealNeighbourTiles(state[/* tiles */0], tile),
           /* showHidden */state[/* showHidden */1]
         ];
 }
@@ -208,7 +196,7 @@ function Game(Props) {
                   ];
           }
         }), /* record */[
-        /* tiles */initTiles(10),
+        /* tiles */initTiles(50),
         /* showHidden */false
       ]);
   var dispatch = match[1];
@@ -232,7 +220,7 @@ var boardWidth = 20;
 
 var boardHeight = 20;
 
-var numBombs = 10;
+var numBombs = 50;
 
 var make = Game;
 

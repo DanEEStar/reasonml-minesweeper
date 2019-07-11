@@ -1,6 +1,7 @@
+[%%debugger.chrome]
 let boardWidth = 20;
 let boardHeight = 20;
-let numBombs = 10;
+let numBombs = 50;
 
 module Tile = {
   type tileState =
@@ -10,7 +11,7 @@ module Tile = {
   type t = {
     index: int,
     numNeighbourBombs: int,
-    neighbours: list(t),
+    //neighbours: list(t),
     state: tileState,
     hasBomb: bool,
   };
@@ -34,7 +35,6 @@ module Tile = {
   let noneTile = {
     index: (-1),
     numNeighbourBombs: 0,
-    neighbours: [],
     state: Hidden,
     hasBomb: false,
   };
@@ -87,7 +87,6 @@ module Tile = {
               index,
               state: Hidden,
               numNeighbourBombs: 0,
-              neighbours: [],
               hasBomb:
                 Belt.Array.some(bombIndexes, bombIndex => bombIndex == index),
             },
@@ -95,13 +94,9 @@ module Tile = {
         )
       ->Belt.Map.Int.fromArray;
 
-    let tilesWithCalcBombs = Belt.Map.Int.map(tiles, t => {
+    Belt.Map.Int.map(tiles, t => {
       {...t, numNeighbourBombs: calcNumNeighbourBombs(tiles, t)};
     });
-
-    Belt.Map.Int.map(tilesWithCalcBombs, t => {
-      {...t, neighbours: getNeighbours(tilesWithCalcBombs, t)};
-    })
   };
 
   [@react.component]
@@ -146,20 +141,22 @@ module Board = {
 };
 
 let revealTile = (tile: Tile.t, state) => {
-  let rec revealNeighbourTiles = (tile: Tile.t, tiles) => {
-    let tiles = Belt.Map.Int.set(state.tiles, tile.index, {...tile, state: Tile.Revealed});
+  Js.log("revealTile called");
+  let rec revealNeighbourTiles = (tiles, tile: Tile.t) => {
+    let tiles = Belt.Map.Int.set(tiles, tile.index, {...tile, state: Tile.Revealed});
     if(tile.numNeighbourBombs == 0) {
-      Belt.List.reduce(tile.neighbours, tiles, (tiles, t) => {
-        Js.log(t.index);
-        Js.log(t.hasBomb);
-        Js.log(t.numNeighbourBombs);
+      let neighbours = Belt.List.keep(Tile.getNeighbours(tiles, tile), t => {
+        t.state == Tile.Hidden;
+      });
+      Belt.List.reduce(neighbours, tiles, (tiles, t) => {
+        let tiles = revealNeighbourTiles(tiles, t);
         Belt.Map.Int.set(tiles, t.index, {...t, state: Tile.Revealed});
       });
     } else {
       tiles;
     }
   };
-  {...state, tiles: revealNeighbourTiles(tile, state.tiles)};
+  {...state, tiles: revealNeighbourTiles(state.tiles, tile)};
 };
 
 [@react.component]
